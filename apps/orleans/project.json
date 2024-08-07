@@ -1,0 +1,26 @@
+{
+  "name": "orleans",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/orleans/src",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "serve": {
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "dependsOn": ["build"],
+      "options": {
+        "buildTarget": "orleans:build",
+        "runBuildTargetDependencies": false
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "orleans:build:development"
+        },
+        "production": {
+          "buildTarget": "orleans:build:production"
+        }
+      }
+    }
+  }
+}
