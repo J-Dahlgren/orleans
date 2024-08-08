@@ -1,3 +1,6 @@
+import ms from "ms";
+import { ClusterClient } from "../messaging/cluster-client";
+
 export type AsyncMethod = (...args: any[]) => Promise<any>;
 
 type FilterPropertiesOfType<T, U> = {
@@ -36,17 +39,9 @@ export interface MessageQueueItem<
   reject: (reason?: any) => void;
 }
 
-export abstract class Grain<T extends object = any> {
-  private _lastActivity = new Date();
-
+export class Grain<T extends object = any> {
   status: GrainStatus = "NotActivated";
-
-  public get lastActivity() {
-    return this._lastActivity;
-  }
-  private set lastActivity(value: Date) {
-    this._lastActivity = value;
-  }
+  grainFactory!: ClusterClient;
 
   get methods(): AsyncMethods<T> {
     return this as unknown as AsyncMethods<T>;
@@ -55,7 +50,8 @@ export abstract class Grain<T extends object = any> {
   private _id!: string;
   private isInitialized = false;
 
-  init(id: string) {
+  init(id: string, grainFactory: ClusterClient) {
+    this.grainFactory = grainFactory;
     if (!this.isInitialized) {
       this.isInitialized = true;
       this._id = id;
@@ -70,53 +66,16 @@ export abstract class Grain<T extends object = any> {
     return this._id;
   }
 
-  private queue: MessageQueueItem<T, keyof GrainMethods<T>>[] = [];
-
-  private isProcessingQueue = false;
-
-  execute<K extends keyof AsyncMethods<T>>(method: K, args: any[]) {
-    const promise = new Promise<ReturnType<AsyncMethod>>((resolve, reject) => {
-      this.queue.push({
-        method,
-        args,
-        resolve,
-        reject,
-      });
-      this.processQueue();
-    });
-    return promise;
-  }
-
-  private async processQueue() {
-    if (this.isProcessingQueue) {
-      return;
-    }
-    this.isProcessingQueue = true;
-    while (this.queue.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const { method, args, resolve, reject } = this.queue.shift()!;
-      const fn = this.methods[method];
-      if (typeof fn !== "function") {
-        reject(new Error(`Method ${String(method)} not found`));
-        continue;
-      }
-      try {
-        this.lastActivity = new Date();
-        const result = await fn(...args);
-        resolve(result);
-      } catch (error) {
-        reject(error);
-      }
-    }
-    this.isProcessingQueue = false;
-  }
-
   onActivate() {
     return Promise.resolve();
   }
 
   onDeactivate() {
     return Promise.resolve();
+  }
+
+  getInactivityThreshold() {
+    return ms("1m");
   }
 }
 export type GrainMethods<T extends object> = Grain<T>["methods"];

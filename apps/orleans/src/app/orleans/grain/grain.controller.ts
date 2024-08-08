@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post } from "@nestjs/common";
-import { GrainDirector } from "../grain-director";
+import { GrainDirector } from "../GrainDirector";
 import {
   CreateGrainDto,
   ExecuteGrainMethodDto,
@@ -7,15 +7,19 @@ import {
   SuccessResponse,
 } from "./dto";
 import { GrainMethods } from "./Grain";
+import { getGrainId } from "./utils";
 
 @Controller("orleans/grain")
 export class GrainController {
   constructor(private readonly grainDirector: GrainDirector) {}
 
-  @Get(":grainId")
-  findGrain(@Param("grainId") grainId: string): FindGrainResponse {
+  @Get(":grainType/:grainId")
+  findGrain(
+    @Param("grainType") grainType: string,
+    @Param("grainId") grainId: string
+  ): FindGrainResponse {
     return {
-      success: this.grainDirector.has(grainId),
+      success: this.grainDirector.has(getGrainId(grainType, grainId)),
     };
   }
 
@@ -26,14 +30,16 @@ export class GrainController {
   }
 
   @Post("execute")
-  execute<T extends object, K extends keyof GrainMethods<T>>(
+  async execute<T extends object, K extends keyof GrainMethods<T>>(
     @Body() dto: ExecuteGrainMethodDto<T, K>
   ) {
-    this.grainDirector.executeLocal(
+    const result = await this.grainDirector.executeLocal(
       dto.type,
       dto.id,
       dto.method as string,
       dto.args
     );
+
+    return result;
   }
 }

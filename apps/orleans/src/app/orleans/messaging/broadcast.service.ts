@@ -3,7 +3,7 @@ import { SiloStatus } from "../SiloEntity";
 import { MembershipService } from "../silo-membership.service";
 
 import { broadcastConstants } from "./constants";
-import { GrainStatusUpdateDto, StatusUpdateDto } from "./dto";
+import { GrainStatusUpdateDto, SiloStatusUpdateDto } from "./dto";
 
 export interface StatusUpdate {
   siloId: number;
@@ -36,9 +36,11 @@ export class BroadcastService {
   }
 
   async updateStatus(status: SiloStatus) {
-    const message: StatusUpdateDto = {
+    const { id, url } = this.membershipService.silo;
+    const message: SiloStatusUpdateDto = {
+      id,
+      url,
       status,
-      siloId: this.membershipService.id,
     };
     await this.broadcast(message, broadcastConstants.siloStatus);
   }

@@ -15,7 +15,9 @@
       },
       "configurations": {
         "development": {
-          "buildTarget": "orleans:build:development"
+          "buildTarget": "orleans:build:development",
+          "inspect": true,
+          "port": 9229
         },
         "production": {
           "buildTarget": "orleans:build:production"

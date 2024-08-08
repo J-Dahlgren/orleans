@@ -9,7 +9,7 @@ import { InjectEntityManager } from "@nestjs/typeorm";
 import { networkInterfaces } from "os";
 import { EntityManager } from "typeorm";
 import { ORLEANS_DATASOURCE } from "./constants";
-import { GrainDirector } from "./grain-director";
+import { GrainDirector } from "./GrainDirector";
 import { BroadcastService } from "./messaging/broadcast.service";
 import { MembershipService } from "./silo-membership.service";
 import { SiloEntity, SiloStatus } from "./SiloEntity";
@@ -24,7 +24,6 @@ export class LifeCycleService
     @InjectEntityManager(ORLEANS_DATASOURCE) private em: EntityManager,
     private broadcastService: BroadcastService,
     private directoryService: GrainDirector,
-
     private membershipService: MembershipService
   ) {}
 
@@ -56,7 +55,7 @@ export class LifeCycleService
       port: parseInt(process.env.PORT || "3000"),
     });
     this.silo = await this.em.save(entity);
-    this.membershipService.setId(this.silo.id);
+    this.membershipService.setSilo(this.silo);
   }
   async afterAppListen() {
     await this.setStatus("Active");

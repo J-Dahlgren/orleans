@@ -1,30 +1,26 @@
 import { Body, Controller, Logger, Post } from "@nestjs/common";
-import { GrainDirector } from "../grain-director";
-import { SiloStatus } from "../SiloEntity";
+import { EventBus } from "../event";
 import { broadcastConstants } from "./constants";
-import { GrainStatusUpdateDto, StatusUpdateDto } from "./dto";
+import { GrainStatusUpdateDto, SiloStatusUpdateDto } from "./dto";
 
 @Controller("orleans/broadcast")
 export class BroadcastController {
-  constructor(private directory: GrainDirector) {}
+  constructor(private eventBus: EventBus) {}
   logger = new Logger(BroadcastController.name);
 
   @Post(broadcastConstants.siloStatus)
-  updateStatus(@Body() dto: StatusUpdateDto) {
+  updateStatus(@Body() dto: SiloStatusUpdateDto) {
     this.logger.debug(
-      `Received status update for silo ${dto.siloId}: ${dto.status}`
+      `Received status update for silo ${dto.id}: ${dto.status}`
     );
-    const deleteOnStatus: SiloStatus[] = ["Stopping", "Stopped"];
-    if (deleteOnStatus.includes(dto.status)) {
-      this.directory.removeForSilo(dto.siloId);
-    }
+    this.eventBus.emit(SiloStatusUpdateDto, dto);
     return { message: "ok" };
   }
 
   @Post(broadcastConstants.grainStatus)
   updateGrainStatus(@Body() dto: GrainStatusUpdateDto) {
     const { grainType, grainId, siloId, status } = dto;
-    this.directory.updateStatus(dto);
+    this.eventBus.emit(GrainStatusUpdateDto, dto);
     this.logger.debug(
       `Received status update for grain ${grainType}/${grainId} on silo ${siloId}: ${status}`
     );

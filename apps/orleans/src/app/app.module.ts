@@ -1,12 +1,10 @@
 import { Module } from "@nestjs/common";
-import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
-import { TestGrain } from "./grains";
 import { OrleansModule } from "./orleans/orleans.module";
+import { TestGrain } from "./TestGrain";
 
 @Module({
   imports: [OrleansModule.forRoot({ grainTypes: [TestGrain] })],
-  controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}

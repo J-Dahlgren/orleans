@@ -43,6 +43,7 @@
     "@swc/helpers": "~0.5.11",
     "@types/jest": "^29.4.0",
     "@types/lodash": "^4.17.7",
+    "@types/ms": "^0.7.34",
     "@types/node": "~18.16.9",
     "@typescript-eslint/eslint-plugin": "^7.16.0",
     "@typescript-eslint/parser": "^7.16.0",

@@ -43,6 +43,10 @@ export type ExecuteGrainNotFoundResponse = {
   status: "not-found";
 };
 export type ExecuteGrainErrorResponse = {
+  status: "grain-error";
+  error: string;
+};
+export type ExecuteGrainGeneralErrorResponse = {
   status: "error";
   error: string;
 };
@@ -53,4 +57,5 @@ export type ExecuteGrainMethodResponse<
 > =
   | ExecuteGrainSuccessResponse<T, K>
   | ExecuteGrainNotFoundResponse
-  | ExecuteGrainErrorResponse;
+  | ExecuteGrainErrorResponse
+  | ExecuteGrainGeneralErrorResponse;

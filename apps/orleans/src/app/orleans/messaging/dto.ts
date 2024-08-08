@@ -1,4 +1,4 @@
-import { IsInt, IsString } from "class-validator";
+import { IsInt, IsString, IsUrl } from "class-validator";
 import { SiloStatus } from "../SiloEntity";
 import { GrainStatus } from "../grain/Grain";
 
@@ -12,14 +12,20 @@ export class GrainStatusUpdateDto {
   @IsInt()
   siloId!: number;
 
+  @IsUrl()
+  url!: string;
+
   @IsString()
   status!: GrainStatus;
 }
 
-export class StatusUpdateDto {
+export class SiloStatusUpdateDto {
   @IsInt()
-  siloId!: number;
+  id!: number;
 
   @IsString()
   status!: SiloStatus;
+
+  @IsUrl()
+  url!: string;
 }

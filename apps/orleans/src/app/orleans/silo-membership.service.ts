@@ -15,17 +15,25 @@ function shuffleArray<T>(items: T[]) {
 
 @Injectable()
 export class MembershipService {
-  siloCache: SiloEntity[] = [];
   private initialized = false;
+
   private logger = new Logger(MembershipService.name);
   id = 0;
+
+  private _silo!: SiloEntity;
+
+  get silo() {
+    return this._silo;
+  }
+
   constructor(
     @InjectEntityManager(ORLEANS_DATASOURCE) private em: EntityManager
   ) {}
 
-  setId(id: number) {
+  setSilo(silo: SiloEntity) {
     this.initialized = true;
-    this.id = id;
+    this.id = silo.id;
+    this._silo = silo;
   }
 
   async updateActiveGrainCount(count: number) {
@@ -36,14 +44,12 @@ export class MembershipService {
       });
       if (silo) {
         silo.activeGrains = count;
-        await em.save(silo);
+        const result = await em.save(silo);
+        this._silo = result;
       }
     });
   }
-  async getSilo(id: number | undefined): Promise<SiloEntity | null> {
-    if (id == undefined) {
-      return null;
-    }
+  async getSilo(id: number): Promise<SiloEntity | null> {
     return this.em.findOne(SiloEntity, { where: { id, status: "Active" } });
   }
 

@@ -1,5 +1,5 @@
-import { Grain } from "./orleans/grain";
-import { DefineGrain } from "./orleans/grain/grain.decorator";
+import { Grain } from "../grain";
+import { DefineGrain } from "../grain/grain.decorator";
 
 export interface ITestGrain {
   method1(): Promise<number>;

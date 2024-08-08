@@ -1,4 +1,4 @@
-import { Injectable, Scope, Type } from "@nestjs/common";
+import { Type } from "@nestjs/common";
 import { Grain } from "./Grain";
 
 export interface GrainOptions {
@@ -8,7 +8,7 @@ export const GrainMetadataKey = "grain:name";
 export function DefineGrain(opts: GrainOptions): ClassDecorator {
   return (target) => {
     Reflect.defineMetadata(GrainMetadataKey, opts.name, target);
-    return Injectable({ scope: Scope.TRANSIENT })(target);
+    return;
   };
 }
 
