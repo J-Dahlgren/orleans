@@ -6,8 +6,8 @@ import "reflect-metadata";
 import { getGrainMetadata } from "../grain/grain.decorator";
 import { GrainService } from "../grain/grain.service";
 import { getGrainIdFromInstance } from "../grain/utils";
+import { MembershipService } from "../membership/silo-membership.service";
 import { GrainStatusUpdateDto } from "../messaging/dto";
-import { MembershipService } from "../silo-membership.service";
 import { SiloEntity } from "../SiloEntity";
 
 describe("GrainDirector", () => {

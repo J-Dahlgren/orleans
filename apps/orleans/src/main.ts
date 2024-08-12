@@ -49,23 +49,24 @@ if (process.env.LOCAL_CLUSTERING === "true") {
 }
 
 async function setupCluster() {
+  const logger = new Logger("SetupCluster");
   if (cluster.isPrimary) {
-    const workerCount = 3;
+    const workerCount = 10;
     for (let i = 0; i < workerCount; i++) {
       await sleep(1000);
-
       setupWorker(`${3000 + i}`, i === 0 ? "true" : "false");
     }
+
     if (process.env.SIMULATE_SILO_SHUTDOWN === "true") {
+      logger.warn(`Setting up worker killer`);
       let killCounter = 0;
       setInterval(() => {
-        Logger.debug(`Killing worker ${killCounter % workerCount}`);
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const worker = Object.values(cluster.workers!)[
           killCounter % workerCount
         ];
         if (worker) {
-          Logger.log(`Killing worker ${killCounter % workerCount}`);
+          logger.warn(`Killing worker ${killCounter % workerCount}`);
           worker.send("shutdown");
           killCounter++;
         }

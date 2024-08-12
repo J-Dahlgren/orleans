@@ -1,3 +1,4 @@
+import { Logger } from "@nestjs/common";
 import { BehaviorSubject, filter, firstValueFrom, take } from "rxjs";
 import { AsyncMethod, AsyncMethods, Grain, GrainMethods } from "./grain/Grain";
 
@@ -11,7 +12,11 @@ export interface MessageQueueItem<
   reject: (reason?: any) => void;
 }
 export class GrainQueue<T extends object> {
-  constructor(public readonly instance: Grain<T>) {}
+  logger: Logger;
+
+  constructor(public readonly instance: Grain<T>) {
+    this.logger = new Logger(`${instance.constructor.name}${instance.id}`);
+  }
   private _lastActivity = new Date();
   public get lastActivity() {
     return this._lastActivity;
@@ -62,6 +67,9 @@ export class GrainQueue<T extends object> {
       return;
     }
     this.isProcessingQueue.next(true);
+    if (this.queue.length >= 10) {
+      this.logger.warn(`Queue length is ${this.queue.length}`);
+    }
     while (this.queue.length > 0) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const { method, args, resolve, reject } = this.queue.shift()!;

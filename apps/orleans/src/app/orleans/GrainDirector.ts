@@ -1,13 +1,12 @@
 import { BadRequestException, Injectable, Logger, Type } from "@nestjs/common";
 import { ModuleRef } from "@nestjs/core";
-import { orderBy } from "lodash";
 import ms from "ms";
 import { interval } from "rxjs";
 import { LocalDirectory, RemoteDirectory } from "./directory";
 import { EventBus } from "./event";
 import { ExecuteGrainMethodResponse } from "./grain/dto";
 import { Grain, GrainMethods, GrainStatus } from "./grain/Grain";
-import { getGrainMetadata } from "./grain/grain.decorator";
+import { getGrainTypeName } from "./grain/grain.decorator";
 import { GrainService } from "./grain/grain.service";
 import {
   getGrainId,
@@ -15,11 +14,11 @@ import {
   getGrainIdFromType,
 } from "./grain/utils";
 import { GrainQueue } from "./GrainQueue";
+import { IMembershipService } from "./membership/IMembershipService";
 import { BroadcastService } from "./messaging/broadcast.service";
 import { ClusterClient } from "./messaging/cluster-client";
-import { broadcastConstants } from "./messaging/constants";
 import { GrainStatusUpdateDto } from "./messaging/dto";
-import { MembershipService } from "./silo-membership.service";
+import { PlacementService } from "./PlacementService";
 import { batchArray } from "./utils";
 
 export interface RemoteGrainItem {
@@ -36,19 +35,19 @@ export class GrainDirector {
     eventBus: EventBus,
     private moduleRef: ModuleRef,
     private broadcastService: BroadcastService,
-    private membershipService: MembershipService,
+    private membershipService: IMembershipService,
+    private placementService: PlacementService,
     private grainService: GrainService,
     private localDirectory: LocalDirectory,
     private remoteDirectory: RemoteDirectory
   ) {
-    interval(ms("5s")).subscribe(() => this.updateGrainCount());
     interval(ms("10s")).subscribe(() => this.checkInactiveGrains());
     eventBus.register(GrainStatusUpdateDto, (v) => this.onGrainStatusUpdate(v));
   }
 
   registerGrains(grains: Type<Grain>[]) {
     grains.forEach((grain) => {
-      const grainName = getGrainMetadata(grain);
+      const grainName = getGrainTypeName(grain);
       this.grainMap.set(grainName, grain);
     });
   }
@@ -61,6 +60,7 @@ export class GrainDirector {
   ): Promise<ExecuteGrainMethodResponse<T, K>> {
     const ctor = this.grainMap.get(type);
     if (!ctor) {
+      this.logger.warn(`Grain type ${type} not found`);
       throw new BadRequestException(`Grain type ${type} not found`);
     }
     const localInstance = this.localDirectory.get(getGrainIdFromType(ctor, id));
@@ -96,18 +96,16 @@ export class GrainDirector {
     }
 
     const grainId = getGrainIdFromType(type, id);
-    const silo = await this.membershipService.getSilo(
-      this.remoteDirectory.get(grainId)?.siloId || 0
-    );
+    const url = this.remoteDirectory.get(grainId)?.url;
 
-    if (!silo) {
+    if (!url) {
       // Retry until the grain is activated on a silo
       return this.execute(type, id, method, args);
     }
 
     const response: ExecuteGrainMethodResponse<T, K> =
-      await this.grainService.executeRemote(silo, {
-        type: getGrainMetadata(type),
+      await this.grainService.executeRemote(url, {
+        type: getGrainTypeName(type),
         id,
         method,
         args,
@@ -132,22 +130,13 @@ export class GrainDirector {
 
     if (
       this.localDirectory.has(grainName) &&
-      siloId !== this.membershipService.id
+      siloId !== this.membershipService.silo.id
     ) {
       this.logger.warn(
         `Grain ${grainName} has been duplicated on silo ${siloId}, removing local instance`
       );
       this.deactivateGrain(grainName);
     }
-  }
-
-  has<T extends object>(
-    id: string | { type: Type<Grain<T>>; id: string }
-  ): boolean {
-    const lookupId =
-      typeof id === "string" ? id : getGrainIdFromType(id.type, id.id);
-
-    return this.localDirectory.has(lookupId);
   }
 
   async lookupOrCreate<T extends object>(type: Type<Grain<T>>, id: string) {
@@ -158,7 +147,6 @@ export class GrainDirector {
       return;
     }
 
-    const silos = await this.membershipService.getSilos(["Active"], true);
     const silo = await this.grainService.findGrain(type, id);
 
     if (silo) {
@@ -171,46 +159,19 @@ export class GrainDirector {
       });
       return;
     }
+    const createOrder = this.placementService.getPlacement(type);
 
-    const ordered = orderBy(silos, (s) => s.activeGrains);
-    const currentActivations = this.localDirectory.size;
-
-    for (const silo of ordered) {
-      if (silo.activeGrains < currentActivations) {
-        const { success } = await this.grainService.createGrain(type, id, silo);
-        if (success) {
-          this.logger.verbose(
-            `Created ${getGrainIdFromType(type, id)} on silo ${silo.id}`
-          );
-          return;
-        } else {
-          this.logger.error(
-            `Failed to create grain ${getGrainIdFromType(type, id)} on silo ${
-              silo.id
-            }`
-          );
-        }
-      } else {
-        await this.create(getGrainMetadata(type), id);
+    for (const silo of createOrder) {
+      if (silo.id === this.membershipService.silo.id) {
+        await this.createLocal(getGrainTypeName(type), id);
         return;
       }
-    }
-    await this.create(getGrainMetadata(type), id);
-  }
 
-  async updateGrainCount() {
-    if (this.localDirectory.size === this.membershipService.silo.activeGrains) {
+      const { success } = await this.grainService.createGrain(type, id, silo);
+      if (!success) {
+        continue;
+      }
       return;
-    }
-    try {
-      this.logger.debug(
-        `Updating grain count from ${this.membershipService.silo.activeGrains} to ${this.localDirectory.size}`
-      );
-      await this.membershipService.updateActiveGrainCount(
-        this.localDirectory.size
-      );
-    } catch (error) {
-      this.logger.error(`Failed to update grain count: ${error}`);
     }
   }
 
@@ -241,7 +202,7 @@ export class GrainDirector {
     }
 
     const grain = queue.instance;
-    const silo = this.membershipService.silo;
+    const url = this.membershipService.silo.url;
     try {
       this.localDirectory.delete(grainId);
       grain.status = "Deactivating";
@@ -250,7 +211,7 @@ export class GrainDirector {
         grainId: grain.id,
         grainType: getGrainIdFromInstance(grain),
         status: grain.status,
-        url: silo.url,
+        url,
       });
 
       if (purgeQueue) {
@@ -266,7 +227,7 @@ export class GrainDirector {
         grainId: grain.id,
         grainType: getGrainIdFromInstance(grain),
         status: grain.status,
-        url: silo.url,
+        url,
       });
     } catch (error) {
       this.logger.error(`Failed to deactivate grain ${grainId}: ${error}`);
@@ -275,9 +236,10 @@ export class GrainDirector {
     grain.status = "Deactivated";
   }
 
-  async create(type: string, id: string) {
+  async createLocal(type: string, id: string) {
     const ctor = this.grainMap.get(type);
     if (!ctor) {
+      this.logger.warn(`Grain type ${type} not found`);
       throw new Error(`Grain type ${type} not found`);
     }
     const grainName = getGrainIdFromType(ctor, id);
@@ -292,18 +254,18 @@ export class GrainDirector {
     const data: GrainStatusUpdateDto = {
       status: "Activating",
       grainId: id,
-      grainType: getGrainMetadata(ctor),
-      siloId: this.membershipService.id,
+      grainType: getGrainTypeName(ctor),
+      siloId: this.membershipService.silo.id,
       url: this.membershipService.silo.url,
     };
     this.logger.log(`Activating grain ${grainName}`);
     instance.status = "Activating";
-    await this.broadcastService.broadcast(data, broadcastConstants.grainStatus);
+    await this.broadcastService.updateGrainStatus(data);
     await instance.onActivate();
     instance.status = "Activated";
     data.status = "Activated";
     this.logger.log(`Activated grain ${grainName}`);
-    await this.broadcastService.broadcast(data, broadcastConstants.grainStatus);
+    await this.broadcastService.updateGrainStatus(data);
     const queue = new GrainQueue(instance);
     this.localDirectory.set(grainName, queue);
 

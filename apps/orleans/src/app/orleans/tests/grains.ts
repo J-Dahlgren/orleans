@@ -6,7 +6,7 @@ export interface ITestGrain {
   method2(): Promise<number>;
 }
 
-@DefineGrain({ name: "Test" })
+@DefineGrain()
 export class TestGrain extends Grain<ITestGrain> implements ITestGrain {
   method1(): Promise<number> {
     return Promise.resolve(1);

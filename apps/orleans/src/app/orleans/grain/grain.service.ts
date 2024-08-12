@@ -1,6 +1,6 @@
 import { Injectable, Logger, Type } from "@nestjs/common";
-import { SiloEntity } from "../SiloEntity";
-import { MembershipService } from "../silo-membership.service";
+import { Silo } from "../Silo";
+import { IMembershipService } from "../membership/IMembershipService";
 import { Grain } from "./Grain";
 import {
   CreateGrainDto,
@@ -9,17 +9,17 @@ import {
   FindGrainResponse,
   SuccessResponse,
 } from "./dto";
-import { getGrainMetadata } from "./grain.decorator";
+import { getGrainTypeName } from "./grain.decorator";
 
 @Injectable()
 export class GrainService {
-  constructor(private membership: MembershipService) {}
+  constructor(private membership: IMembershipService) {}
   private logger = new Logger(GrainService.name);
   async executeRemote(
-    silo: SiloEntity,
+    siloUrl: string,
     msg: ExecuteGrainMethodDto<any, any>
   ): Promise<ExecuteGrainMethodResponse<any, any>> {
-    const response = await fetch(`${silo.url}/orleans/grain/execute`, {
+    const response = await fetch(`${siloUrl}/orleans/grain/execute`, {
       method: "POST",
       body: JSON.stringify(msg),
       headers: {
@@ -34,19 +34,19 @@ export class GrainService {
   }
 
   async findGrain(type: Type<Grain>, id: string) {
-    const silos = await this.membership.getSilos(["Active"], true);
+    const silos = this.membership.getSilos(["Active"], true);
     for (const silo of silos) {
       try {
-        const grain = await fetch(
+        const request = await fetch(
           `${silo.url}/orleans/grain/${type.name}/${id}`
         );
-        if (grain.ok) {
-          const response: FindGrainResponse = await grain.json();
+        if (request.ok) {
+          const response: FindGrainResponse = await request.json();
           if (response.success) {
             return silo;
           }
         } else {
-          this.logger.error(await grain.text());
+          this.logger.error(await request.text());
           continue;
         }
       } catch (error) {
@@ -59,11 +59,11 @@ export class GrainService {
   async createGrain<T extends object>(
     type: Type<Grain<T>>,
     id: string,
-    silo: SiloEntity
+    silo: Silo
   ): Promise<SuccessResponse> {
     const body: CreateGrainDto = {
       id: id,
-      type: getGrainMetadata(type),
+      type: getGrainTypeName(type),
     };
     const request = await fetch(`${silo.url}/orleans/grain`, {
       method: "POST",

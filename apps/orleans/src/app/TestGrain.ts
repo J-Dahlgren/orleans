@@ -1,4 +1,4 @@
-import { Injectable, Logger, Scope } from "@nestjs/common";
+import { Logger } from "@nestjs/common";
 import { Grain } from "./orleans/grain";
 import { DefineGrain } from "./orleans/grain/grain.decorator";
 import {
@@ -7,14 +7,14 @@ import {
 } from "./orleans/grain/utils";
 
 import ms from "ms";
+import { GrainPlacementStrategy } from "./orleans/grain/PlacementStategy";
 
 export interface ITestGrain {
   increment(): Promise<number>;
   reset(): Promise<void>;
 }
 
-@DefineGrain({ name: "TestGrain" })
-@Injectable({ scope: Scope.TRANSIENT })
+@DefineGrain({ placementStrategy: GrainPlacementStrategy.ActivationCount })
 export class TestGrain extends Grain<ITestGrain> implements ITestGrain {
   constructor() {
     super();

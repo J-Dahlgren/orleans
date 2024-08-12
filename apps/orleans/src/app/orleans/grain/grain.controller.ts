@@ -1,4 +1,6 @@
 import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { ApiTags } from "@nestjs/swagger";
+import { LocalDirectory } from "../directory";
 import { GrainDirector } from "../GrainDirector";
 import {
   CreateGrainDto,
@@ -10,8 +12,12 @@ import { GrainMethods } from "./Grain";
 import { getGrainId } from "./utils";
 
 @Controller("orleans/grain")
+@ApiTags("Grain")
 export class GrainController {
-  constructor(private readonly grainDirector: GrainDirector) {}
+  constructor(
+    private readonly grainDirector: GrainDirector,
+    private localDirectory: LocalDirectory
+  ) {}
 
   @Get(":grainType/:grainId")
   findGrain(
@@ -19,13 +25,13 @@ export class GrainController {
     @Param("grainId") grainId: string
   ): FindGrainResponse {
     return {
-      success: this.grainDirector.has(getGrainId(grainType, grainId)),
+      success: this.localDirectory.has(getGrainId(grainType, grainId)),
     };
   }
 
   @Post()
   async createGrain(@Body() dto: CreateGrainDto): Promise<SuccessResponse> {
-    await this.grainDirector.create(dto.type, dto.id);
+    await this.grainDirector.createLocal(dto.type, dto.id);
     return { success: true };
   }
 
@@ -41,5 +47,10 @@ export class GrainController {
     );
 
     return result;
+  }
+
+  @Get("activations")
+  getActivations() {
+    return [...this.localDirectory.keys()];
   }
 }
